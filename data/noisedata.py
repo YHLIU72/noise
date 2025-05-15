@@ -81,7 +81,59 @@ class NoiseData(Dataset):
         sheet_idx = torch.LongTensor([sheet_idx])
             
         return input, output, type, sheet_idx
-    
+class NoiseDataModify(Dataset):
+    def __init__(self, dir='../data', filename='data_final.xlsx', use_type = None, transform = None):
+        self.dir = dir
+        self.filename = filename
+        self.use_type = use_type
+        self.transform = transform
+        try:
+            if 'train' in filename:
+                all_sheets = pd.read_excel(os.path.join(self.dir, self.filename), sheet_name=None)
+            elif 'test' in filename:
+                all_sheets = pd.read_excel(os.path.join(self.dir, self.filename), sheet_name=None)
+            else:
+                all_sheets = pd.read_excel(os.path.join(self.dir, self.filename), sheet_name=None)
+        except Exception as e:
+            raise e
+        self.dataFrame = pd.DataFrame()
+        self.sheet_names = []
+        self.sheet_indices = []
+        
+        for sheet_idx, (sheet_name, df) in enumerate(all_sheets.items()):
+            self.sheet_names.append(sheet_name)
+            df['sheet_idx'] = sheet_idx
+            self.dataFrame = pd.concat([self.dataFrame, df], ignore_index=True)
+
+    def __len__(self):
+        return self.dataFrame.__len__()
+
+    def __getitem__(self, idx):
+        keys = self.dataFrame.keys()
+        input = [self.dataFrame[keys[1]][idx], self.dataFrame[keys[2]][idx], self.dataFrame[keys[3]][idx], self.dataFrame[keys[5]][idx],self.dataFrame[keys[6]][idx],self.dataFrame[keys[7]][idx]]
+        output = [self.dataFrame[keys[8]][idx]]
+        input = torch.tensor(input).to(torch.float32)
+        output = torch.tensor(output).to(torch.float32)
+        if self.transform is not None:
+            input = self.transform(input)
+        sheet_idx = self.dataFrame['sheet_idx'][idx]
+        bowl_idx = self.dataFrame[keys[4]][idx]
+
+        
+        if isinstance(input, torch.Tensor):
+            input = input.clone().detach()
+        else:
+            input = torch.FloatTensor(input)
+            
+        if isinstance(output, torch.Tensor):
+            output = output.clone().detach()
+        else:
+            output = torch.FloatTensor(output)
+            
+        sheet_idx = torch.LongTensor([sheet_idx])
+        bowl_idx = torch.LongTensor([bowl_idx])
+            
+        return input, output, sheet_idx, bowl_idx
 class NoiseDataFiltered(Dataset):
     def __init__(self):
         pass
@@ -211,3 +263,54 @@ class NoiseDataFFT(Dataset):
             return input, output, type_, sheet_idx
         else:
             return input, output, sheet_idx
+
+class NoiseDataFFTModify(Dataset):
+    def __init__(self, dir='../data', filename='data_final_fft_0217.xlsx', use_type = None, transform = None, debug = None, fft_out=401):
+        self.dir = dir
+        self.filename = filename
+        self.use_type = use_type
+        self.transform = transform
+        self.debug = debug
+        self.fft_out = fft_out
+        try:
+            if 'train' in filename:
+                all_sheets = pd.read_excel(os.path.join(self.dir, self.filename ), sheet_name=None)
+            elif 'test' in filename:
+                all_sheets = pd.read_excel(os.path.join(self.dir, self.filename ), sheet_name=None)
+            else:
+                all_sheets = pd.read_excel(os.path.join(self.dir, self.filename ), sheet_name=None)
+        except Exception as e:
+            raise e
+        self.dataFrame = pd.DataFrame()
+        self.sheet_names = []
+        for sheet_idx, (sheet_name, df) in enumerate(all_sheets.items()):
+            self.sheet_names.append(sheet_name)
+            df['sheet_idx'] = sheet_idx
+            self.dataFrame = pd.concat([self.dataFrame, df], ignore_index=True)
+        
+        self.le = []
+        keys = self.dataFrame.keys()
+        if self.use_type:
+            le = LabelEncoder()
+            self.dataFrame[keys[0]] = le.fit_transform(self.dataFrame[keys[0]])
+            # print(le.fit_transform(['AD02','BYD HTH','E0Y-3Z3M','GEM','H37','H97D','KKL','M1E','MAR2 2Z','MAR2 EVA2','MBQ','MEB','NU2','SA5H','SRH','T1X','T2X RHD','X03']))
+            self.le = le.classes_
+
+    def __len__(self):
+        return self.dataFrame.__len__()
+
+    def __getitem__(self, idx):
+        keys = self.dataFrame.keys()
+        input = [self.dataFrame[keys[1]][idx], self.dataFrame[keys[2]][idx], self.dataFrame[keys[3]][idx], self.dataFrame[keys[5]][idx],self.dataFrame[keys[6]][idx],self.dataFrame[keys[7]][idx]]
+        input = torch.tensor(input).to(torch.float32)
+        if self.transform is not None:
+            input = self.transform(input)
+        if isinstance(input, torch.Tensor):
+            input = input.clone().detach()
+        M1 = [self.dataFrame[keys[4]][idx]]
+        # output = self.dataFrame.iloc[idx, 5:].tolist()   # 0~25600 401维
+        output = self.dataFrame.iloc[idx, 9:35].tolist()   # 31.5~10000 26维
+        output = torch.tensor(output).to(torch.float32)
+        sheet_idx = torch.LongTensor([self.dataFrame['sheet_idx'][idx]])
+        bowl_idx = torch.LongTensor([self.dataFrame[keys[4]][idx]])
+        return input, output, sheet_idx, bowl_idx
